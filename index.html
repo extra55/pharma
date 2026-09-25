@@ -1,0 +1,1080 @@
+﻿<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام إدارة الصيدلية الذكي</title>
+    
+    <!-- أيقونة تبويب المتصفح (Favicon) -->
+
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+
+    <!-- أيقونة أجهزة أبل (iPhone / iPad) -->
+
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+
+    <!-- ربط ملف الـ Manifest -->
+
+    <link rel="manifest" href="manifest.json">
+
+    <!-- PWA Manifest for Web App Installation -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"نظام الصيدلية الذكي","short_name":"الصيدلية","start_url":".","display":"standalone","background_color":"#f4f6f9","theme_color":"#0d6efd","icons":[{"src":"icon-512.png","sizes":"512x512","type":"image/png"}]}'>
+
+    <!-- Bootstrap 5 RTL -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Google Fonts (Cairo) -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS Excel Library -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- HTML5 QR Code Scanner Library for Camera Barcode -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        body { font-family: 'Cairo', sans-serif; background-color: #f4f6f9; color: #333; }
+        .navbar { background: linear-gradient(135deg, #0d6efd, #0a58ca); }
+        .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
+        .bg-safe { background-color: #d1e7dd; color: #0f5132; }
+        .bg-warning-custom { background-color: #fff3cd; color: #664d03; }
+        .bg-expired { background-color: #f8d7da; color: #842029; }
+        .spinner-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255, 255, 255, 0.85);
+            display: flex; justify-content: center; align-items: center; z-index: 9999;
+        }
+        .table th, .table td { white-space: nowrap; }
+        #reader { width: 100%; border-radius: 8px; overflow: hidden; }
+    </style>
+</head>
+<body>
+
+    <!-- شاشة التحميل -->
+    <div id="loadingSpinner" class="spinner-overlay d-none">
+        <div class="text-center">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
+            <div class="mt-2 fw-bold text-primary" id="spinnerText">جاري الاتصال بالسيرفر...</div>
+        </div>
+    </div>
+
+    <!-- شاشة تسجيل الدخول -->
+    <div id="loginSection" class="container d-flex justify-content-center align-items-center vh-100">
+        <div class="card p-4 shadow-lg" style="width: 100%; max-width: 450px;">
+            <div class="text-center mb-3">
+                <i class="fa-solid fa-prescription-bottle-medical text-primary display-4 mb-2"></i>
+                <h4 class="fw-bold">نظام الصيدلية الذكي</h4>
+                <p class="text-muted small">سجل الدخول للوصول إلى بيانات المخزون</p>
+            </div>
+
+            <div id="loginAlert" class="alert alert-danger d-none"></div>
+
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">معرف الصيدلية (ID)</label>
+                    <input type="text" id="pharmacyId" class="form-control" placeholder="الحساب الافتراضي: 101" required>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label fw-bold">كلمة المرور</label>
+                    <input type="password" id="password" class="form-control" placeholder="كلمة المرور الافتراضية: 123" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 py-2 fw-bold mb-2">
+                    دخول إلى النظام <i class="fa-solid fa-right-to-bracket ms-1"></i>
+                </button>
+                <a href="https://wa.me/9647803342472" target="_blank" class="btn btn-outline-success w-100 py-2 fw-bold">
+                    راسل الدعم <i class="fa-brands fa-whatsapp ms-1"></i>
+                </a>
+            </form>
+        </div>
+    </div>
+
+    <!-- شاشة اللوحة الرئيسية -->
+    <div id="mainDashboard" class="d-none">
+        <nav class="navbar navbar-expand-lg navbar-dark mb-4 shadow-sm">
+            <div class="container">
+                <a class="navbar-brand fw-bold" href="#">
+                    <i class="fa-solid fa-clinic-medical me-2"></i> صيدلية: <span id="displayPharmacyName">-</span>
+                </a>
+                
+                <div class="d-flex align-items-center gap-2">
+                    <!-- مؤشرات الحالة (أونلاين / أوفلاين والمزامنة) -->
+                    <span id="netStatusBadge" class="badge bg-success rounded-pill px-3 py-2 fw-bold">
+                        <i class="fa-solid fa-wifi me-1"></i> متصل
+                    </span>
+                    <span id="syncStatusBadge" class="badge bg-warning text-dark rounded-pill px-3 py-2 fw-bold d-none">
+                        <i class="fa-solid fa-rotate fa-spin me-1"></i> مزامنة (<span id="syncPendingCount">0</span>)
+                    </span>
+
+                    <a href="https://wa.me/9647803342472" target="_blank" class="btn btn-success btn-sm rounded-pill px-3 fw-bold">
+                        راسل الدعم <i class="fa-brands fa-whatsapp ms-1"></i>
+                    </a>
+                    <button class="btn btn-outline-light btn-sm rounded-pill" onclick="handleLogout()">
+                        خروج <i class="fa-solid fa-arrow-right-from-bracket ms-1"></i>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container mb-5">
+            <ul class="nav nav-pills mb-4" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active fw-bold" id="tab-inventory" data-bs-toggle="pill" data-bs-target="#content-inventory">
+                        <i class="fa-solid fa-boxes-stacked me-1"></i> إدارة المخزون
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link fw-bold" id="tab-logs" data-bs-toggle="pill" data-bs-target="#content-logs" onclick="loadLogs()">
+                        <i class="fa-solid fa-clock-rotate-left me-1"></i> سجل العمليات
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+                <!-- تبويب المخزون -->
+                <div class="tab-pane fade show active" id="content-inventory">
+                    
+                    <!-- إحصائيات -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <div class="card p-3 bg-white">
+                                <h6 class="text-muted mb-1">إجمالي الأدوية</h6>
+                                <h3 class="mb-0 fw-bold" id="statTotal">0</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card p-3 bg-safe">
+                                <h6 class="mb-1">الأدوية الصالحة</h6>
+                                <h3 class="mb-0 fw-bold" id="statSafe">0</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card p-3 bg-warning-custom">
+                                <h6 class="mb-1">تنتهي قريباً (أقل من 90 يوم)</h6>
+                                <h3 class="mb-0 fw-bold" id="statWarning">0</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card p-3 bg-expired">
+                                <h6 class="mb-1">منتهية الصلاحية</h6>
+                                <h3 class="mb-0 fw-bold" id="statExpired">0</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- التحكم -->
+                    <div class="card p-3 mb-4">
+                        <div class="row g-3 align-items-center">
+                            <div class="col-md-4">
+                                <div class="input-group">
+                                    <input type="text" id="searchInput" class="form-control" placeholder="بحث باسم الدواء، الوجبة، أو الباركود..." oninput="filterTable()">
+                                    <button class="btn btn-outline-dark" type="button" onclick="startCameraScanner()" title="مسح باستخدام كاميرا الهاتف/الويبكم">
+                                        <i class="fa-solid fa-barcode"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <select id="statusFilter" class="form-select" onchange="filterTable()">
+                                    <option value="all">جميع الحالات</option>
+                                    <option value="safe">صالحة</option>
+                                    <option value="warning">قريبة الانتهاء</option>
+                                    <option value="expired">منتهية</option>
+                                </select>
+                            </div>
+                            <div class="col-md-5 text-md-end">
+                                <button class="btn btn-primary me-1" onclick="openAddModal()"><i class="fa-solid fa-plus"></i> إضافة دواء</button>
+                                <label class="btn btn-success me-1 mb-0">
+                                    <i class="fa-solid fa-file-excel"></i> استيراد Excel
+                                    <input type="file" id="excelFile" accept=".xlsx, .xls" class="d-none" onchange="importExcel(event)">
+                                </label>
+                                <button class="btn btn-outline-secondary" onclick="exportToExcel()"><i class="fa-solid fa-download"></i> تصدير</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- جدول البيانات -->
+                    <div class="card p-3">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>الباركود</th>
+                                        <th>اسم الدواء</th>
+                                        <th>السعر</th>
+                                        <th>الوجبة (Batch)</th>
+                                        <th>تاريخ الانتهاء</th>
+                                        <th>الحالة</th>
+                                        <th class="text-center">إجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="medicineTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- تبويب السجل -->
+                <div class="tab-pane fade" id="content-logs">
+                    <div class="card p-3">
+                        <h5 class="fw-bold mb-3">سجل العمليات</h5>
+                        <div class="table-responsive">
+                            <table class="table table-striped align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>التاريخ والوقت</th>
+                                        <th>المستخدم</th>
+                                        <th>العملية</th>
+                                        <th>التفاصيل</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logsTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- النافذة المنبثقة للإضافة والتعديل -->
+    <div class="modal fade" id="medicineModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold" id="modalTitle">إضافة دواء</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="medicineForm" onsubmit="event.preventDefault(); saveMedicine();">
+                        <input type="hidden" id="editRowId">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">الباركود (Barcode)</label>
+                            <div class="input-group">
+                                <input type="text" id="medBarcode" class="form-control" placeholder="امسح الباركود أو اكتبه هنا">
+                                <button class="btn btn-outline-secondary" type="button" onclick="startCameraScanner('medBarcode')">
+                                    <i class="fa-solid fa-camera"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">اسم الدواء *</label>
+                            <input type="text" id="medName" class="form-control" required placeholder="مثال: Paracetamol">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">رقم الوجبة</label>
+                            <input type="text" id="medBatch" class="form-control">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">تاريخ الانتهاء *</label>
+                            <input type="date" id="medExpDate" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">السعر</label>
+                            <input type="text" id="medPrice" class="form-control" placeholder="مثال: 5000">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-primary fw-bold" onclick="saveMedicine()">حفظ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة مسح الباركود عبر الكاميرا -->
+    <div class="modal fade" id="cameraModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">مسح الباركود بالكاميرا</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" onclick="stopCameraScanner()"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <div id="reader"></div>
+                    <p class="text-muted small mt-2 mb-0">وجه الكاميرا نحو باركود علبة الدواء</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="stopCameraScanner()">إغلاق</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbyW9lVm8Yd-A4OJ8c_V52U7d3egNxmc-WEC0S-HWWAm6ueca6oAfkbIk-t5VBpXkz0s/exec";
+
+        function safeGetStorage(key) { try { return localStorage.getItem(key) || ''; } catch(e) { return ''; } }
+        function safeSetStorage(key, val) { try { localStorage.setItem(key, val); } catch(e) {} }
+        function safeRemoveStorage(key) { try { localStorage.removeItem(key); } catch(e) {} }
+
+        let currentPharmacyId = safeGetStorage('pharmacyId');
+        let currentPassword = safeGetStorage('password');
+        let currentPharmacyName = safeGetStorage('pharmacyName');
+
+        let allMedicines = [];
+        let bsModal = null;
+        let cameraModal = null;
+        let html5QrCode = null;
+        let targetInputFieldId = null;
+        let db = null;
+        let isSyncing = false;
+
+        // --- 1. إعداد قاعدة بيانات المتصفح (IndexedDB) للعمل أوفلاين ---
+        function initIndexedDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open("PharmacyOfflineDB", 2);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains("medicines")) {
+                        db.createObjectStore("medicines", { keyPath: "rowId" });
+                    }
+                    if (!db.objectStoreNames.contains("syncQueue")) {
+                        db.createObjectStore("syncQueue", { keyPath: "id", autoIncrement: true });
+                    }
+                    if (!db.objectStoreNames.contains("logs")) {
+                        db.createObjectStore("logs", { keyPath: "id", autoIncrement: true });
+                    }
+                };
+                request.onsuccess = (e) => {
+                    db = e.target.result;
+                    resolve(db);
+                };
+                request.onerror = (e) => reject(e);
+            });
+        }
+
+        async function saveMedicinesToLocal(medicines) {
+            if (!db) return;
+            const tx = db.transaction("medicines", "readwrite");
+            const store = tx.objectStore("medicines");
+            await store.clear();
+            medicines.forEach(m => store.put(m));
+        }
+
+        async function saveSingleLocalMedicine(medicine) {
+            if (!db) return;
+            const tx = db.transaction("medicines", "readwrite");
+            tx.objectStore("medicines").put(medicine);
+        }
+
+        async function removeLocalMedicine(rowId) {
+            if (!db) return;
+            const tx = db.transaction("medicines", "readwrite");
+            tx.objectStore("medicines").delete(rowId);
+        }
+
+        async function getLocalMedicines() {
+            if (!db) return [];
+            return new Promise((resolve) => {
+                const tx = db.transaction("medicines", "readonly");
+                const req = tx.objectStore("medicines").getAll();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => resolve([]);
+            });
+        }
+
+        async function addToSyncQueue(payload) {
+            if (!db) return;
+            const tx = db.transaction("syncQueue", "readwrite");
+            tx.objectStore("syncQueue").add({ payload, timestamp: new Date().getTime() });
+            updateNetworkStatus();
+        }
+
+        async function getSyncQueue() {
+            if (!db) return [];
+            return new Promise((resolve) => {
+                const tx = db.transaction("syncQueue", "readonly");
+                const req = tx.objectStore("syncQueue").getAll();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => resolve([]);
+            });
+        }
+
+        async function removeSyncQueueItem(id) {
+            if (!db) return;
+            const tx = db.transaction("syncQueue", "readwrite");
+            tx.objectStore("syncQueue").delete(id);
+        }
+
+        // --- التعامل مع السجل محلياً (IndexedDB) ---
+        async function saveLogsToLocal(logs) {
+            if (!db) return;
+            const tx = db.transaction("logs", "readwrite");
+            const store = tx.objectStore("logs");
+            await store.clear();
+            logs.forEach(l => store.put(l));
+        }
+
+        async function getLocalLogs() {
+            if (!db) return [];
+            return new Promise((resolve) => {
+                const tx = db.transaction("logs", "readonly");
+                const req = tx.objectStore("logs").getAll();
+                req.onsuccess = () => resolve((req.result || []).reverse());
+                req.onerror = () => resolve([]);
+            });
+        }
+
+        async function addLocalLog(action, details) {
+            if (!db) return;
+            const now = new Date();
+            const timestamp = now.getFullYear() + "-" +
+                String(now.getMonth() + 1).padStart(2, '0') + "-" +
+                String(now.getDate()).padStart(2, '0') + " " +
+                String(now.getHours()).padStart(2, '0') + ":" +
+                String(now.getMinutes()).padStart(2, '0') + ":" +
+                String(now.getSeconds()).padStart(2, '0');
+
+            const logObj = {
+                timestamp: timestamp,
+                userName: currentPharmacyName || "الصيدلية",
+                action: action,
+                details: details
+            };
+
+            const tx = db.transaction("logs", "readwrite");
+            tx.objectStore("logs").add(logObj);
+        }
+
+        // --- 2. إعداد شريط الحالة وخاطف الخدمة (Service Worker) ---
+        function updateNetworkStatus() {
+            const netBadge = document.getElementById('netStatusBadge');
+            const syncBadge = document.getElementById('syncStatusBadge');
+            const syncCount = document.getElementById('syncPendingCount');
+
+            if (navigator.onLine) {
+                netBadge.className = "badge bg-success rounded-pill px-3 py-2 fw-bold";
+                netBadge.innerHTML = '<i class="fa-solid fa-wifi me-1"></i> متصل';
+                processSyncQueue();
+            } else {
+                netBadge.className = "badge bg-danger rounded-pill px-3 py-2 fw-bold";
+                netBadge.innerHTML = '<i class="fa-solid fa-wifi-slash me-1"></i> أوفلاين';
+            }
+
+            getSyncQueue().then(queue => {
+                if (queue.length > 0) {
+                    syncBadge.classList.remove('d-none');
+                    syncCount.innerText = queue.length;
+                } else {
+                    syncBadge.classList.add('d-none');
+                }
+            });
+        }
+
+        function registerServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                const swCode = `
+                    self.addEventListener('install', e => self.skipWaiting());
+                    self.addEventListener('activate', e => clients.claim());
+                    self.addEventListener('fetch', e => {
+                        if (e.request.method === 'GET') {
+                            e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+                        }
+                    });
+                `;
+                const blob = new Blob([swCode], { type: 'application/javascript' });
+                navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+            }
+        }
+
+        // --- 3. تشغيل النظام وأحداث المتصفح ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initIndexedDB();
+            registerServiceWorker();
+
+            bsModal = new bootstrap.Modal(document.getElementById('medicineModal'));
+            cameraModal = new bootstrap.Modal(document.getElementById('cameraModal'));
+
+            window.addEventListener('online', updateNetworkStatus);
+            window.addEventListener('offline', updateNetworkStatus);
+            updateNetworkStatus();
+
+            const cameraModalEl = document.getElementById('cameraModal');
+            if (cameraModalEl) {
+                cameraModalEl.addEventListener('shown.bs.modal', async () => {
+                    try {
+                        if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
+                        const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+                        await html5QrCode.start(
+                            { facingMode: "environment" },
+                            config,
+                            (decodedText) => {
+                                stopCameraScanner();
+                                cameraModal.hide();
+                                playBeepSound();
+                                if (targetInputFieldId) {
+                                    document.getElementById(targetInputFieldId).value = decodedText;
+                                } else {
+                                    handleScannedBarcode(decodedText, false);
+                                }
+                            },
+                            () => {}
+                        );
+                    } catch (err) {
+                        alert("تعذر فتح الكاميرا! تأكد من إعطاء إذن استخدام الكاميرا.");
+                        cameraModal.hide();
+                    }
+                });
+
+                cameraModalEl.addEventListener('hidden.bs.modal', () => stopCameraScanner());
+            }
+
+            if (currentPharmacyId && currentPassword) {
+                showDashboard();
+                loadMedicines();
+            }
+
+            initPhysicalBarcodeScanner();
+        });
+
+        function playBeepSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = "sine";
+                osc.frequency.setValueAtTime(1750, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.12);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.12);
+            } catch (e) {}
+        }
+
+        function showLoading(show, text = "جاري الاتصال بالسيرفر...") {
+            document.getElementById('spinnerText').innerText = text;
+            document.getElementById('loadingSpinner').classList.toggle('d-none', !show);
+        }
+
+        async function apiCall(payload) {
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                mode: 'cors',
+                redirect: 'follow',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            return await res.json();
+        }
+
+        // --- 4. معالجة المزامنة في الخلفية (Sync Queue Execution) ---
+        async function processSyncQueue() {
+            if (!navigator.onLine || isSyncing) return;
+            const queue = await getSyncQueue();
+            if (queue.length === 0) return;
+
+            isSyncing = true;
+            for (const item of queue) {
+                try {
+                    const res = await apiCall(item.payload);
+                    if (res && (res.success || res.authError === false)) {
+                        await removeSyncQueueItem(item.id);
+                    }
+                } catch (err) {
+                    break;
+                }
+            }
+            isSyncing = false;
+            updateNetworkStatus();
+            loadMedicines(true);
+        }
+
+        // --- 5. قراءة الباركود الفيزيائي والكاميرا ---
+        let barcodeBuffer = "";
+        let barcodeTimer = null;
+
+        function initPhysicalBarcodeScanner() {
+            document.addEventListener('keydown', (e) => {
+                const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+                if (activeTag === 'input' || activeTag === 'textarea') return;
+
+                if (e.key === 'Enter') {
+                    if (barcodeBuffer.trim().length >= 3) {
+                        e.preventDefault();
+                        handleScannedBarcode(barcodeBuffer.trim(), true);
+                        barcodeBuffer = "";
+                    }
+                } else if (e.key.length === 1) {
+                    barcodeBuffer += e.key;
+                    clearTimeout(barcodeTimer);
+                    barcodeTimer = setTimeout(() => { barcodeBuffer = ""; }, 150);
+                }
+            });
+        }
+
+        function handleScannedBarcode(code, shouldPlaySound = true) {
+            if (shouldPlaySound) playBeepSound();
+            const modalEl = document.getElementById('medicineModal');
+            if (modalEl.classList.contains('show')) {
+                document.getElementById('medBarcode').value = code;
+                return;
+            }
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.value = code;
+                filterTable();
+            }
+        }
+
+        function startCameraScanner(targetField = null) {
+            targetInputFieldId = targetField;
+            cameraModal.show();
+        }
+
+        function stopCameraScanner() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().catch(() => {});
+            }
+        }
+
+        // 6. تسجيل الدخول
+        async function handleLogin(e) {
+            if (e) e.preventDefault();
+            const alertBox = document.getElementById('loginAlert');
+            alertBox.classList.add('d-none');
+
+            const id = document.getElementById('pharmacyId').value.trim();
+            const pass = document.getElementById('password').value.trim();
+
+            if (!id || !pass) {
+                alertBox.innerText = 'يرجى كتابة معرف الصيدلية وكلمة المرور';
+                alertBox.classList.remove('d-none');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const data = await apiCall({ action: 'login', pharmacyId: id, password: pass });
+
+                if (data && data.success) {
+                    currentPharmacyId = id;
+                    currentPassword = pass;
+                    currentPharmacyName = data.name;
+
+                    safeSetStorage('pharmacyId', id);
+                    safeSetStorage('password', pass);
+                    safeSetStorage('pharmacyName', data.name);
+
+                    showDashboard();
+                    loadMedicines();
+                } else {
+                    alertBox.innerText = (data && data.message) ? data.message : 'معلومات الدخول غير صحيحة';
+                    alertBox.classList.remove('d-none');
+                }
+            } catch (err) {
+                alertBox.innerText = 'فشل الاتصال بـ Google API. يُرجى التأكد من توفر الإنترنت.';
+                alertBox.classList.remove('d-none');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function showDashboard() {
+            document.getElementById('loginSection').classList.add('d-none');
+            document.getElementById('mainDashboard').classList.remove('d-none');
+            document.getElementById('displayPharmacyName').innerText = currentPharmacyName;
+        }
+
+        function handleLogout() {
+            if (confirm("هل أنت تأكد من رغبتك في تسجيل الخروج؟")) {
+                safeRemoveStorage('pharmacyId');
+                safeRemoveStorage('password');
+                safeRemoveStorage('pharmacyName');
+                location.reload();
+            }
+        }
+
+        // 7. تحميل البيانات (مع دعم الأوفلاين)
+        async function loadMedicines(silent = false) {
+            if (!silent) showLoading(true);
+            if (navigator.onLine) {
+                try {
+                    const data = await apiCall({ action: 'getMedicines', pharmacyId: currentPharmacyId, password: currentPassword });
+                    if (data.authError) {
+                        alert(data.message);
+                        handleLogout();
+                        return;
+                    }
+                    if (data.success) {
+                        allMedicines = data.data || [];
+                        await saveMedicinesToLocal(allMedicines);
+                    }
+                } catch (err) {
+                    allMedicines = await getLocalMedicines();
+                }
+            } else {
+                allMedicines = await getLocalMedicines();
+            }
+
+            updateStats();
+            filterTable();
+            if (!silent) showLoading(false);
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr || dateStr === '-') return '-';
+            let s = String(dateStr).trim();
+            if (s.includes('T')) s = s.split('T')[0];
+            if (s.includes(' ')) s = s.split(' ')[0];
+            s = s.replace(/\//g, '-');
+            
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+            
+            const parts = s.split('-');
+            if (parts.length === 3) {
+                if (parts[2].length === 4) {
+                    const day = parts[0].padStart(2, '0');
+                    const month = parts[1].padStart(2, '0');
+                    return `${parts[2]}-${month}-${day}`;
+                }
+                if (parts[0].length === 4) {
+                    const month = parts[1].padStart(2, '0');
+                    const day = parts[2].padStart(2, '0');
+                    return `${parts[0]}-${month}-${day}`;
+                }
+            }
+
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return s || '-';
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function getExpiryStatus(expDateString) {
+            if (!expDateString || expDateString === '-') return { text: 'غير موضح', badge: 'bg-secondary', type: 'safe' };
+            
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const cleanStr = formatDate(expDateString);
+            const parts = cleanStr.split('-');
+            let expDate;
+            if (parts.length === 3) {
+                expDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+            } else {
+                expDate = new Date(expDateString);
+            }
+            expDate.setHours(0, 0, 0, 0);
+
+            const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+
+            if (diffDays < 0) return { text: 'منتهي الصلاحية', badge: 'bg-danger', type: 'expired' };
+            if (diffDays <= 90) return { text: `ينتهي خلال ${diffDays} يوم`, badge: 'bg-warning text-dark', type: 'warning' };
+            return { text: 'صالح', badge: 'bg-success', type: 'safe' };
+        }
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function updateStats() {
+            let safe = 0, warning = 0, expired = 0;
+            allMedicines.forEach(m => {
+                const st = getExpiryStatus(m.expDate).type;
+                if (st === 'safe') safe++;
+                else if (st === 'warning') warning++;
+                else if (st === 'expired') expired++;
+            });
+            document.getElementById('statTotal').innerText = allMedicines.length;
+            document.getElementById('statSafe').innerText = safe;
+            document.getElementById('statWarning').innerText = warning;
+            document.getElementById('statExpired').innerText = expired;
+        }
+
+        function filterTable() {
+            const searchInput = document.getElementById('searchInput');
+            const search = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            const filter = document.getElementById('statusFilter') ? document.getElementById('statusFilter').value : 'all';
+
+            const filtered = allMedicines.filter(m => {
+                const nameStr = String(m.name || '').toLowerCase();
+                const batchStr = String(m.batch || '').toLowerCase();
+                const barcodeStr = String(m.barcode || '').toLowerCase();
+
+                const matchSearch = nameStr.includes(search) || 
+                                    batchStr.includes(search) || 
+                                    barcodeStr.includes(search);
+
+                const matchFilter = (filter === 'all') || (getExpiryStatus(m.expDate).type === filter);
+                return matchSearch && matchFilter;
+            });
+
+            const tbody = document.getElementById('medicineTableBody');
+            if (!tbody) return;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">لا توجد أدوية مطابقة</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.map((m, idx) => {
+                const st = getExpiryStatus(m.expDate);
+                const displayExp = formatDate(m.expDate);
+                const bCode = m.barcode ? String(m.barcode) : '';
+                const price = m.price !== undefined && m.price !== null && m.price !== '' ? String(m.price) : '-';
+                return `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td><span class="badge bg-light text-dark border"><i class="fa-solid fa-barcode me-1"></i>${escapeHtml(bCode || '-')}</span></td>
+                        <td class="fw-bold">${escapeHtml(m.name)}</td>
+                        <td class="fw-bold text-success">${escapeHtml(price)}</td>
+                        <td>${escapeHtml(m.batch || '-')}</td>
+                        <td>${displayExp}</td>
+                        <td><span class="badge ${st.badge}">${st.text}</span></td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary me-1" onclick="openEditModal('${m.rowId}', '${escapeHtml(m.name)}', '${escapeHtml(m.batch)}', '${m.expDate}', '${escapeHtml(bCode)}', '${escapeHtml(m.price || '')}')">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteMedicine('${m.rowId}', '${escapeHtml(m.name)}')">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // 8. إضافة وتعديل مع الدعم الكامل للأوفلاين والمزامنة
+        function openAddModal() {
+            document.getElementById('modalTitle').innerText = 'إضافة دواء جديد';
+            document.getElementById('editRowId').value = '';
+            document.getElementById('medicineForm').reset();
+            bsModal.show();
+        }
+
+        function openEditModal(rowId, name, batch, expDate, barcode = '', price = '') {
+            document.getElementById('modalTitle').innerText = 'تعديل بيانات الدواء';
+            document.getElementById('editRowId').value = rowId;
+            document.getElementById('medBarcode').value = barcode;
+            document.getElementById('medName').value = name;
+            document.getElementById('medBatch').value = batch;
+            document.getElementById('medExpDate').value = formatDate(expDate);
+            document.getElementById('medPrice').value = price;
+            bsModal.show();
+        }
+
+        async function saveMedicine() {
+            const rowId = document.getElementById('editRowId').value;
+            const barcode = document.getElementById('medBarcode').value.trim();
+            const name = document.getElementById('medName').value.trim();
+            const batch = document.getElementById('medBatch').value.trim();
+            const expDate = document.getElementById('medExpDate').value;
+            const price = document.getElementById('medPrice').value.trim();
+
+            if (!name || !expDate) return alert('يرجى كتابة اسم الدواء وتاريخ الانتهاء');
+
+            showLoading(true);
+            const action = rowId ? 'updateMedicine' : 'addMedicine';
+            const payload = { action, pharmacyId: currentPharmacyId, password: currentPassword, rowId, barcode, name, batch, expDate, price };
+
+            if (navigator.onLine) {
+                try {
+                    const res = await apiCall(payload);
+                    if (res.success) {
+                        bsModal.hide();
+                        loadMedicines();
+                    } else alert(res.message || 'خطأ في الحفظ');
+                } catch (err) {
+                    await saveOfflineFallback(payload);
+                } finally {
+                    showLoading(false);
+                }
+            } else {
+                await saveOfflineFallback(payload);
+                showLoading(false);
+            }
+        }
+
+        async function saveOfflineFallback(payload) {
+            let actName = '';
+            if (payload.action === 'addMedicine') {
+                const localObj = {
+                    rowId: "local_" + Date.now(),
+                    name: payload.name,
+                    batch: payload.batch,
+                    expDate: payload.expDate,
+                    barcode: payload.barcode,
+                    price: payload.price
+                };
+                allMedicines.unshift(localObj);
+                await saveSingleLocalMedicine(localObj);
+                actName = 'إضافة دواء (أوفلاين)';
+                await addLocalLog(actName, 'تم إضافة: ' + payload.name);
+            } else {
+                const idx = allMedicines.findIndex(m => String(m.rowId) === String(payload.rowId));
+                if (idx !== -1) {
+                    allMedicines[idx] = { ...allMedicines[idx], name: payload.name, batch: payload.batch, expDate: payload.expDate, barcode: payload.barcode, price: payload.price };
+                    await saveSingleLocalMedicine(allMedicines[idx]);
+                }
+                actName = 'تعديل دواء (أوفلاين)';
+                await addLocalLog(actName, 'تم تعديل بيانات الدواء: ' + payload.name);
+            }
+            await addToSyncQueue(payload);
+            bsModal.hide();
+            updateStats();
+            filterTable();
+            alert('تم الحفظ محلياً (أوفلاين). ستتم المزامنة تلقائياً عند الاتصال بالإنترنت.');
+        }
+
+        // 9. حذف أوفلاين/أونلاين
+        async function deleteMedicine(rowId, name) {
+            if (!confirm(`تأكيد حذف الدواء: "${name}"؟`)) return;
+            showLoading(true);
+            const payload = { action: 'deleteMedicine', pharmacyId: currentPharmacyId, password: currentPassword, rowId };
+
+            if (navigator.onLine) {
+                try {
+                    const res = await apiCall(payload);
+                    if (res.success) loadMedicines();
+                    else alert(res.message);
+                } catch (err) {
+                    await deleteOfflineFallback(rowId, name, payload);
+                } finally {
+                    showLoading(false);
+                }
+            } else {
+                await deleteOfflineFallback(rowId, name, payload);
+                showLoading(false);
+            }
+        }
+
+        async function deleteOfflineFallback(rowId, name, payload) {
+            allMedicines = allMedicines.filter(m => String(m.rowId) !== String(rowId));
+            await removeLocalMedicine(rowId);
+            await addToSyncQueue(payload);
+            await addLocalLog('حذف دواء (أوفلاين)', 'تم حذف الدواء: ' + name);
+            updateStats();
+            filterTable();
+            alert('تم الحذف محلياً. ستتم المزامنة مع السيرفر فور توفر الإنترنت.');
+        }
+
+        // 10. استيراد Excel
+        async function importExcel(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+                    let medicines = [];
+                    for (let i = 1; i < json.length; i++) {
+                        const row = json[i];
+                        if (row && row[0]) {
+                            const name = String(row[0]).trim();
+                            const batch = row[1] ? String(row[1]).trim() : '';
+                            const expDate = row[2] ? formatDate(row[2]) : '';
+                            const barcode = row[3] ? String(row[3]).trim() : '';
+                            const price = row[4] ? String(row[4]).trim() : '';
+                            if (name && expDate) medicines.push({ name, batch, expDate, barcode, price });
+                        }
+                    }
+
+                    if (medicines.length === 0) return alert('لم يتم العثور على أدوية صالحة بالملف');
+
+                    showLoading(true);
+                    const payload = { action: 'addMedicinesBulk', pharmacyId: currentPharmacyId, password: currentPassword, medicines };
+
+                    if (navigator.onLine) {
+                        const res = await apiCall(payload);
+                        if (res.success) {
+                            alert(`✅ تم استيراد (${res.count}) دواء بنجاح`);
+                            loadMedicines();
+                        } else alert(res.message);
+                    } else {
+                        for (let m of medicines) {
+                            const tempMed = { ...m, rowId: "local_" + Date.now() + "_" + Math.random() };
+                            allMedicines.unshift(tempMed);
+                            await saveSingleLocalMedicine(tempMed);
+                        }
+                        await addToSyncQueue(payload);
+                        await addLocalLog('استيراد جماعي (أوفلاين)', `تم استيراد (${medicines.length}) دواء محلياً`);
+                        updateStats();
+                        filterTable();
+                        alert(`✅ تم استيراد (${medicines.length}) دواء محلياً (أوفلاين). ستتم المزامنة فور توفر الإنترنت.`);
+                    }
+                } catch (err) {
+                    alert('خطأ في ملف الإكسل');
+                } finally {
+                    showLoading(false);
+                    e.target.value = '';
+                }
+            };
+            reader.readAsBuffer(file);
+        }
+
+        // 11. تصدير Excel
+        function exportToExcel() {
+            if (allMedicines.length === 0) return alert('لا توجد بيانات للتصدير');
+            const exportData = allMedicines.map((m, idx) => ({
+                "ت": idx + 1, "الباركود": m.barcode || '', "اسم الدواء": m.name, "السعر": m.price || '', "الوجبة": m.batch || '',
+                "تاريخ الانتهاء": formatDate(m.expDate), "الحالة": getExpiryStatus(m.expDate).text
+            }));
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "المخزون");
+            XLSX.writeFile(wb, `مخزون_${currentPharmacyName}_${formatDate(new Date())}.xlsx`);
+        }
+
+        // 12. سجل العمليات (يعمل أوفلاين وأونلاين)
+        async function loadLogs() {
+            const tbody = document.getElementById('logsTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">جاري التحميل...</td></tr>';
+            
+            let logs = [];
+
+            if (navigator.onLine) {
+                try {
+                    const res = await apiCall({ action: 'getLogs', pharmacyId: currentPharmacyId, password: currentPassword });
+                    if (res && res.success) {
+                        logs = res.data || [];
+                        await saveLogsToLocal(logs);
+                    } else {
+                        logs = await getLocalLogs();
+                    }
+                } catch (err) {
+                    logs = await getLocalLogs();
+                }
+            } else {
+                logs = await getLocalLogs();
+            }
+
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">لا توجد عمليات مسجلة</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = logs.map(l => `
+                <tr>
+                    <td><small>${escapeHtml(l.timestamp)}</small></td>
+                    <td>${escapeHtml(l.userName)}</td>
+                    <td><span class="badge bg-info text-dark">${escapeHtml(l.action)}</span></td>
+                    <td>${escapeHtml(l.details)}</td>
+                </tr>
+            `).join('');
+        }
+    </script>
+    <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+      .then(() => console.log("PWA Service Worker Registered"));
+  }
+    </script>
+</body>
+</html>
