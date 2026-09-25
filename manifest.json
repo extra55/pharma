@@ -1,7 +1,7 @@
 ﻿{
-  "name": "Smart Ph",
-  "short_name": "نظام الصيدلية الذكي",
-  "description": "نظام متكامل لإدارة الصيدليات والمبيعات يعمل أوفلاين وبشكل سحابي",
+  "name": "-",
+  "short_name": "Smart Pharma",
+  "description": "نظام متكامل لإدارة الصيدليات يعمل أوفلاين وبشكل سحابي",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "any",
