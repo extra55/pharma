@@ -53,7 +53,7 @@
     <div id="loadingSpinner" class="spinner-overlay d-none">
         <div class="text-center">
             <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div>
-            <div class="mt-2 fw-bold text-primary" id="spinnerText">جاري الاتصال بالسيرفر...</div>
+            <div class="mt-2 fw-bold text-primary" id="spinnerText">جار الاتصال بالسيرفر...</div>
         </div>
     </div>
 
@@ -63,7 +63,7 @@
             <div class="text-center mb-3">
                 <i class="fa-solid fa-prescription-bottle-medical text-primary display-4 mb-2"></i>
                 <h4 class="fw-bold">نظام الصيدلية الذكي</h4>
-                <p class="text-muted small">سجل الدخول للوصول إلى بيانات المخزون</p>
+                <p class="text-muted small">سجل الدخول للوصول إلى لوحة التحكم</p>
             </div>
 
             <div id="loginAlert" class="alert alert-danger d-none"></div>
@@ -71,11 +71,11 @@
             <form id="loginForm" onsubmit="handleLogin(event)">
                 <div class="mb-3">
                     <label class="form-label fw-bold">معرف الصيدلية (ID)</label>
-                    <input type="text" id="pharmacyId" class="form-control" placeholder="الحساب الافتراضي: 101" required>
+                    <input type="text" id="pharmacyId" class="form-control" placeholder="User Name" required>
                 </div>
                 <div class="mb-4">
                     <label class="form-label fw-bold">كلمة المرور</label>
-                    <input type="password" id="password" class="form-control" placeholder="كلمة المرور الافتراضية: 123" required>
+                    <input type="password" id="password" class="form-control" placeholder="Password" required>
                 </div>
                 <button type="submit" class="btn btn-primary w-100 py-2 fw-bold mb-2">
                     دخول إلى النظام <i class="fa-solid fa-right-to-bracket ms-1"></i>
