@@ -1,7 +1,7 @@
 ﻿{
-  "name": "Smart Pharmacy",
+  "name": "Smart Pharmacy System",
   "short_name": "Smart Pharmacy Management System",
-  "description": "نظام متكامل لإدارة الصيدليات يعمل أوفلاين وبشكل سحابي",
+  "description": "نظام متكامل لإدارة الصيدليات",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "any",
