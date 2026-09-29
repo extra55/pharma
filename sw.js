@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pharmacy-app-v2'; // 👈 غير هذا الرقم مع كل تحديث جديد
+const CACHE_NAME = 'pharmacy-app-v3'; // 👈 غير هذا الرقم مع كل تحديث جديد
 
 const ASSETS_TO_CACHE = [
   './',
