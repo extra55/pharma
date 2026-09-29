@@ -108,7 +108,7 @@
                         راسل الدعم <i class="fa-brands fa-whatsapp ms-1"></i>
                     </a>
                     <button class="btn btn-outline-light btn-sm rounded-pill" onclick="handleLogout()">
-                        خروج <i class="fa-solid fa-arrow-right-from-bracket ms-1"></i>
+                        تسجيل خروج <i class="fa-solid fa-arrow-right-from-bracket ms-1"></i>
                     </button>
                 </div>
             </div>
@@ -1069,6 +1069,11 @@
                 </tr>
             `).join('');
         }
+
+// الاستماع لتغيير الـ Service Worker وإعادة تحميل الصفحة تلقائياً
+navigator.serviceWorker.addEventListener('controllerchange', () => {
+  window.location.reload();
+});
     </script>
     <script>
   if ('serviceWorker' in navigator) {
